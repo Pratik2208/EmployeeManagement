@@ -35,44 +35,37 @@ jobs:
       - name: Install SonarScanner
         run: dotnet tool install --global dotnet-sonarscanner
 
-      - name: Install ReportGenerator
-        run: dotnet tool install --global dotnet-reportgenerator-globaltool
-
       - name: Add .NET Tools to PATH
         run: echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
 
-      #################################################################
-      # SonarQube Begin - Pull Request Analysis
-      #################################################################
+      ########################################################
+      # Sonar Begin - PR
+      ########################################################
 
       - name: Sonar Begin (PR)
         if: github.event_name == 'pull_request'
         run: |
           dotnet sonarscanner begin \
-            /k:"EmployeeManagement" \
+            /k:"dotnet-crud-api" \
             /d:sonar.host.url="${{ secrets.SONAR_HOST_URL }}" \
             /d:sonar.token="${{ secrets.SONAR_TOKEN }}" \
             /d:sonar.pullrequest.key="${{ github.event.pull_request.number }}" \
             /d:sonar.pullrequest.branch="${{ github.head_ref }}" \
             /d:sonar.pullrequest.base="${{ github.base_ref }}" \
-            /d:sonar.cs.opencover.reportsPaths="**/coverage.opencover.xml"
+            /d:sonar.cs.vscoveragexml.reportsPaths="**/coverage.cobertura.xml"
 
-      #################################################################
-      # SonarQube Begin - Main Branch Analysis
-      #################################################################
+      ########################################################
+      # Sonar Begin - Master
+      ########################################################
 
-      - name: Sonar Begin (Main)
+      - name: Sonar Begin (Master)
         if: github.event_name == 'push'
         run: |
           dotnet sonarscanner begin \
-            /k:"EmployeeManagement" \
+            /k:"dotnet-crud-api" \
             /d:sonar.host.url="${{ secrets.SONAR_HOST_URL }}" \
             /d:sonar.token="${{ secrets.SONAR_TOKEN }}" \
-            /d:sonar.cs.opencover.reportsPaths="**/coverage.opencover.xml"
-
-      #################################################################
-      # Build
-      #################################################################
+            /d:sonar.cs.vscoveragexml.reportsPaths="**/coverage.cobertura.xml"
 
       - name: Restore
         run: dotnet restore
@@ -80,9 +73,9 @@ jobs:
       - name: Build
         run: dotnet build --configuration Release --no-restore
 
-      #################################################################
-      # Test + Coverage
-      #################################################################
+      ########################################################
+      # Tests + Coverage
+      ########################################################
 
       - name: Run Tests with Coverage
         run: |
@@ -92,33 +85,22 @@ jobs:
             --collect:"XPlat Code Coverage" \
             --results-directory TestResults
 
-      #################################################################
-      # Convert Cobertura -> OpenCover
-      #################################################################
-
-      - name: Generate OpenCover Report
+      - name: Verify Coverage Files
         run: |
-          reportgenerator \
-            -reports:"TestResults/**/coverage.cobertura.xml" \
-            -targetdir:"CoverageReport" \
-            -reporttypes:"OpenCover"
+          find TestResults -type f
 
-      - name: Verify Coverage File
-        run: |
-          find . -name "coverage.opencover.xml"
-
-      #################################################################
-      # SonarQube End
-      #################################################################
+      ########################################################
+      # Sonar End
+      ########################################################
 
       - name: Sonar End
         run: |
           dotnet sonarscanner end \
             /d:sonar.token="${{ secrets.SONAR_TOKEN }}"
 
-      #################################################################
+      ########################################################
       # Quality Gate
-      #################################################################
+      ########################################################
 
       - name: Quality Gate
         uses: SonarSource/sonarqube-quality-gate-action@v1.2.0
