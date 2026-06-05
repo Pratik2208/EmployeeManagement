@@ -4,9 +4,14 @@ on:
   push:
     branches:
       - '**'
+
   pull_request:
     branches:
       - '**'
+
+concurrency:
+  group: sonar-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
@@ -18,7 +23,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Setup .NET
+      - name: Setup .NET 10
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
@@ -26,30 +31,91 @@ jobs:
       - name: Install SonarScanner
         run: dotnet tool install --global dotnet-sonarscanner
 
-      - name: Add tools to PATH
+      - name: Add .NET tools to PATH
         run: echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
 
-      - name: Sonar Begin
+      ########################################################
+      # SONAR BEGIN - PR
+      ########################################################
+
+      - name: Sonar Begin (PR)
+        if: github.event_name == 'pull_request'
         run: |
           dotnet sonarscanner begin \
-            /k:"dotnet-crud-api" \
+            /k:"EmployeeManagement" \
             /d:sonar.host.url="${{ secrets.SONAR_HOST_URL }}" \
-            /d:sonar.token="${{ secrets.SONAR_TOKEN }}"
+            /d:sonar.token="${{ secrets.SONAR_TOKEN }}" \
+            /d:sonar.pullrequest.key="${{ github.event.pull_request.number }}" \
+            /d:sonar.pullrequest.branch="${{ github.head_ref }}" \
+            /d:sonar.pullrequest.base="${{ github.base_ref }}" \
+            /d:sonar.cs.opencover.reportsPaths="**/coverage.opencover.xml"
+
+      ########################################################
+      # SONAR BEGIN - BRANCH
+      ########################################################
+
+      - name: Sonar Begin (Branch)
+        if: github.event_name != 'pull_request'
+        run: |
+          dotnet sonarscanner begin \
+            /k:"EmployeeManagement" \
+            /d:sonar.host.url="${{ secrets.SONAR_HOST_URL }}" \
+            /d:sonar.token="${{ secrets.SONAR_TOKEN }}" \
+            /d:sonar.cs.opencover.reportsPaths="**/coverage.opencover.xml"
+
+      - name: Restore
+        run: dotnet restore
 
       - name: Build
-        run: dotnet build
+        run: dotnet build --no-restore --configuration Release
 
-      - name: Run Tests
-        run: dotnet test EmployeeManagement.Tests/EmployeeManagement.Tests.csproj --no-build --verbosity normal
+      ########################################################
+      # TESTS + COVERAGE
+      ########################################################
+
+      - name: Run Tests with Coverage
+        run: |
+          dotnet test \
+            --no-build \
+            --configuration Release \
+            --collect:"XPlat Code Coverage" \
+            --results-directory TestResults
+
+      ########################################################
+      # GENERATE OPENCOVER REPORT
+      ########################################################
+
+      - name: Install ReportGenerator
+        run: |
+          dotnet tool install --global dotnet-reportgenerator-globaltool
+
+      - name: Generate OpenCover Report
+        run: |
+          reportgenerator \
+            -reports:"TestResults/**/coverage.cobertura.xml" \
+            -targetdir:"CoverageReport" \
+            -reporttypes:"OpenCover"
+
+      - name: Verify Coverage Files
+        run: |
+          find . -name "*.xml"
+
+      ########################################################
+      # SONAR END
+      ########################################################
 
       - name: Sonar End
         run: |
           dotnet sonarscanner end \
             /d:sonar.token="${{ secrets.SONAR_TOKEN }}"
-      
+
+      ########################################################
+      # QUALITY GATE
+      ########################################################
+
       - name: Quality Gate
-        uses: sonarsource/sonarqube-quality-gate-action@v1.2.0
-        timeout-minutes: 20
+        uses: SonarSource/sonarqube-quality-gate-action@v1.2.0
+        timeout-minutes: 10
         with:
           pollingTimeoutSec: 600
           scanMetadataReportFile: .sonarqube/out/.sonar/report-task.txt
