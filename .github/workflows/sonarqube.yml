@@ -39,6 +39,19 @@ jobs:
         run: echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
 
       ########################################################
+      # Sonar Begin - Master
+      ########################################################
+
+      - name: Sonar Begin (Master)
+        if: github.event_name == 'push'
+        run: |
+          dotnet sonarscanner begin \
+            /k:"dotnet-crud-api" \
+            /d:sonar.host.url="${{ secrets.SONAR_HOST_URL }}" \
+            /d:sonar.token="${{ secrets.SONAR_TOKEN }}" \
+            /d:sonar.cs.opencover.reportsPaths="**/coverage.opencover.xml"
+
+      ########################################################
       # Sonar Begin - PR
       ########################################################
 
@@ -52,20 +65,7 @@ jobs:
             /d:sonar.pullrequest.key="${{ github.event.pull_request.number }}" \
             /d:sonar.pullrequest.branch="${{ github.head_ref }}" \
             /d:sonar.pullrequest.base="${{ github.base_ref }}" \
-            /d:sonar.cs.vscoveragexml.reportsPaths="**/coverage.cobertura.xml"
-
-      ########################################################
-      # Sonar Begin - Master
-      ########################################################
-
-      - name: Sonar Begin (Master)
-        if: github.event_name == 'push'
-        run: |
-          dotnet sonarscanner begin \
-            /k:"dotnet-crud-api" \
-            /d:sonar.host.url="${{ secrets.SONAR_HOST_URL }}" \
-            /d:sonar.token="${{ secrets.SONAR_TOKEN }}" \
-            /d:sonar.cs.vscoveragexml.reportsPaths="**/coverage.cobertura.xml"
+            /d:sonar.cs.opencover.reportsPaths="**/coverage.opencover.xml"
 
       - name: Restore
         run: dotnet restore
@@ -77,17 +77,17 @@ jobs:
       # Tests + Coverage
       ########################################################
 
-      - name: Run Tests with Coverage
+      - name: Run Tests with Coverage  # Uses coverlet.msbuild MSBuild properties
         run: |
           dotnet test \
             --configuration Release \
             --no-build \
-            --collect:"XPlat Code Coverage" \
-            --results-directory TestResults
+            /p:CollectCoverage=true \
+            /p:CoverletOutputFormat=opencover \
+            /p:CoverletOutput=./TestResults/coverage.opencover.xml
 
       - name: Verify Coverage Files
-        run: |
-          find TestResults -type f
+        run: find TestResults -type f
 
       ########################################################
       # Sonar End
