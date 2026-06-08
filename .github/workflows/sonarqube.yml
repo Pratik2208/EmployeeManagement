@@ -39,6 +39,19 @@ jobs:
         run: echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
 
       ########################################################
+      # Sonar Begin - Master
+      ########################################################
+
+      - name: Sonar Begin (Master)
+        if: github.event_name == 'push'
+        run: |
+          dotnet sonarscanner begin \
+            /k:"dotnet-crud-api" \
+            /d:sonar.host.url="${{ secrets.SONAR_HOST_URL }}" \
+            /d:sonar.token="${{ secrets.SONAR_TOKEN }}" \
+            /d:sonar.cs.opencover.reportsPaths="${GITHUB_WORKSPACE}/TestResults/coverage.opencover.xml"
+
+      ########################################################
       # Sonar Begin - PR
       ########################################################
 
@@ -52,20 +65,7 @@ jobs:
             /d:sonar.pullrequest.key="${{ github.event.pull_request.number }}" \
             /d:sonar.pullrequest.branch="${{ github.head_ref }}" \
             /d:sonar.pullrequest.base="${{ github.base_ref }}" \
-            /d:sonar.cs.vscoveragexml.reportsPaths="**/coverage.cobertura.xml"
-
-      ########################################################
-      # Sonar Begin - Master
-      ########################################################
-
-      - name: Sonar Begin (Master)
-        if: github.event_name == 'push'
-        run: |
-          dotnet sonarscanner begin \
-            /k:"dotnet-crud-api" \
-            /d:sonar.host.url="${{ secrets.SONAR_HOST_URL }}" \
-            /d:sonar.token="${{ secrets.SONAR_TOKEN }}" \
-            /d:sonar.cs.vscoveragexml.reportsPaths="**/coverage.cobertura.xml"
+            /d:sonar.cs.opencover.reportsPaths="${GITHUB_WORKSPACE}/TestResults/coverage.opencover.xml"
 
       - name: Restore
         run: dotnet restore
@@ -82,12 +82,32 @@ jobs:
           dotnet test \
             --configuration Release \
             --no-build \
-            --collect:"XPlat Code Coverage" \
-            --results-directory TestResults
+            --verbosity normal \
+            -p:CollectCoverage=true \
+            -p:CoverletOutputFormat=opencover \
+            -p:CoverletOutput="${GITHUB_WORKSPACE}/TestResults/coverage.opencover.xml"
+
+      ########################################################
+      # Verify Coverage Files (Debug)
+      ########################################################
 
       - name: Verify Coverage Files
+        if: always()
         run: |
-          find TestResults -type f
+          echo "=== GITHUB_WORKSPACE ==="
+          echo $GITHUB_WORKSPACE
+
+          echo "=== Current directory ==="
+          pwd
+
+          echo "=== Looking for any xml files ==="
+          find . -name "*.xml" 2>/dev/null
+
+          echo "=== Looking for TestResults anywhere ==="
+          find . -name "TestResults" -type d 2>/dev/null
+
+          echo "=== Looking for opencover files ==="
+          find . -name "*.opencover.xml" 2>/dev/null
 
       ########################################################
       # Sonar End
